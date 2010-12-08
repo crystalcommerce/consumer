@@ -1,4 +1,4 @@
-%w[rubygems rake rake/clean fileutils newgem rubigen].each { |f| require f }
+%w[rubygems rake rake/clean fileutils newgem rubigen hoe].each { |f| require f }
 require File.dirname(__FILE__) + '/lib/consumer'
 
 # Generate all the Rake tasks
@@ -14,7 +14,8 @@ $hoe = Hoe.new('consumer', Consumer::VERSION) do |p|
     ['builder',      '>= 2.1.2']
   ]
   p.extra_dev_deps = [
-    ['newgem', ">= #{::Newgem::VERSION}"]
+    ['newgem', ">= #{::Newgem::VERSION}"],
+    ['hoe',    ">= 2.6.2"]
   ]
   
   p.clean_globs |= %w[**/.DS_Store tmp *.log]

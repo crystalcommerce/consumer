@@ -12,6 +12,10 @@ class MockRequest < Consumer::Request
   end
 end
 
+class NonCompactingMockRequest < MockRequest
+  use_compact_xml false
+end
+
 class Mock
   include Consumer::Mapping
   attr_accessor :hello
@@ -53,6 +57,16 @@ describe Consumer::Request do
         and_return(mock("response", :body => response_xml, :response => mock("aoeu", :code => "200")))
       object = request.do
       object.hello.should == "Woody"
+    end
+    it "should not leave empty tags in by default" do
+      request = MockRequest.new(:hello => "")
+      request.to_xml_etc.should_not =~ /\<Hello/
+    end
+  end
+  describe "do without compacting" do
+    it "leaves empty tags in" do
+      request = NonCompactingMockRequest.new(:hello => "")
+      request.to_xml_etc.should =~ /\<Hello/
     end
   end
   

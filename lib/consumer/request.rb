@@ -83,43 +83,59 @@ class Consumer::Request
       @request_pass
     end
 
+    def http_method(method = nil)
+      @http_method = method if method
+      @http_method
+    end
+
     def url(url = nil)
       @url = url if url
       @url
     end
- 
+
     def required(*args)
       @required = args if !args.empty?
       @required || []
     end
- 
+
+    # Default to using compact XML because more services choke on empty tags
+    # than do ones that choke on missing tags that are optional.
+    def use_compact_xml(use = true)
+      @use_compact_xml = use
+    end
+
+    # In case the option is never specified, assume true
+    def use_compact_xml?
+      @use_compact_xml.nil? ? true : false
+    end
+
     def response_class(klass = nil)
       @response_class = klass if klass
       self.to_s =~ /(.+?)Request/
       @response_class || $1
     end
- 
+
     def yaml_defaults(*args)
       @yaml_defaults = args if !args.empty?
       @yaml_defaults
     end
- 
+
     def defaults(defaults = nil)
       @defaults = defaults if defaults
       @defaults || {}
     end
- 
+
     def error_paths(options = nil)
       @error_paths = options if options
       @error_paths
     end
   end
- 
+
   class RequestError < StandardError;end
   class RequiredFieldError < StandardError;end
- 
+
   attr_reader :response_xml, :request_xml
- 
+
   # First gets defaults from self.defaults, merges them with defaults from
   # +yaml_defaults+, merges all that with passed in attrs, and initializes all
   # those into instance variables for use in to_xml.
@@ -141,7 +157,7 @@ class Consumer::Request
     final_attrs = all_defaults.merge(attrs)
     initialize_attrs(final_attrs)
   end
- 
+
   # Sends self.to_xml to self.url and returns new object(s) created via
   # [response_class].from_xml
   # === Prerequisites
@@ -159,28 +175,33 @@ class Consumer::Request
     raise "to_xml not defined for #{self.class}" if not defined?(self.to_xml)
     raise "url not defined for #{self.class}" if not self.url
     raise "from_xml not defined for #{response_class}" if not defined?(response_class.from_xml)
- 
+
     @request_xml = self.to_xml_etc
-    
+
     resp = send_request(self.url)
 
     check_request_error(resp)
- 
+
     return response_class.from_xml(resp)
   end
   alias :do :send!
 
   def send_request(url)
     heads = defined?(self.headers) ? self.headers : {}
-    
+
     uri = URI.parse url
     http = Net::HTTP.new uri.host, uri.port
-    req = Net::HTTP::Post.new(uri.request_uri, heads)
+    if http_method == 'GET'
+      req = Net::HTTP::Get.new(uri.request_uri, heads)
+    else
+      req = Net::HTTP::Post.new(uri.request_uri, heads)
+    end
+
     if uri.port == 443
       http.use_ssl = true
       http.verify_mode = OpenSSL::SSL::VERIFY_NONE
     end
-    req.basic_auth @request_user, @request_pass if @request_user && @request_pass
+    req.basic_auth request_user, request_pass if request_user && request_pass
     req.body = @request_xml
     puts "\n##### Request to #{url}:\n\n#{@request_xml}\n" if $DEBUG
     debugger if $CONSUMER_POST_DEBUGGER
@@ -189,12 +210,12 @@ class Consumer::Request
     puts "\n##### Response:\n\n#{Helper.tidy(@response_xml)}\n" if $DEBUG
     return @response_xml
   end
-  
+
   def self.send!(args = {})
     self.new(args).do
   end
   def self.do(args = {});send!(args);end
-  
+
   # Gets called during do instead of just to_xml, and does a bit more than
   # just return xml.
   # 
@@ -209,9 +230,9 @@ class Consumer::Request
     self.before_to_xml if defined?(before_to_xml)
     self.check_required
     xml = self.to_xml
-    return (defined?(COMPACT_XML) && !COMPACT_XML) ? xml : Helper.compact_xml(xml)
+    return (use_compact_xml? ? Helper.compact_xml(xml) : xml)
   end
- 
+
   # returns self.class.response_class as a constant (not a string)
   #
   # Raises a runtime error if self.class.response_class is nil
@@ -221,6 +242,10 @@ class Consumer::Request
     return Object.const_get(ret)
   end
 
+  def use_compact_xml?
+    self.class.use_compact_xml?
+  end
+
   def request_user
     self.class.request_user
   end
@@ -228,23 +253,27 @@ class Consumer::Request
   def request_pass
     self.class.request_pass
   end
- 
+
+  def http_method
+    self.class.http_method
+  end
+
   def error_paths
     self.class.error_paths
   end
- 
+
   def required
     self.class.required
   end
- 
+
   def yaml_defaults
     self.class.yaml_defaults
   end
- 
+
   def url
     self.class.url
   end
- 
+
   def defaults
     self.class.defaults
   end
@@ -278,30 +307,30 @@ private
   def check_request_error(xml)
     return if !error_paths
     return if !xml || !xml.include?('<?xml')
- 
+
     response_doc = LibXML::XML::Parser.string(xml).parse
     error = response_doc.find_first(error_paths[:root])
     return if error.nil? || error.empty?
- 
+
     code = error.find_first(error_paths[:code]).first.content
     message = error.find_first(error_paths[:message]).first.content
- 
+
     raise RequestError, "Code #{code}: #{message}"
   end
-  
+
   def builder # :nodoc:
     @builder ||= Builder::XmlMarkup.new(:target => @xml, :indent => 2)
   end
   alias :b :builder
- 
- 
+
+
   # set instance variables based on a hash, i.e. @key = value
   def initialize_attrs(attrs)
     attrs.each do |attr, value|
       self.instance_variable_set("@#{attr}", value)
     end
   end
-  
+
   def symbolize_keys(*hashes)
     hashes.each do |hash|
       hash.each {|k,v| hash[k.to_sym] = v;hash.delete(k.to_s)}

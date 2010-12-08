@@ -55,7 +55,12 @@ describe Consumer::Mapping do
       MockObject.map(:first, "//CarrierResponse",{:another => "AAA"})
     }.should raise_error
   end
-  
+
+  it "return the existing map if you try to define the same map root twice" do
+    original = MockObject.map(:first, "//CarrierResponse",{:something => "woot"})
+    MockObject.map(:first, "//CarrierResponse",{:another => "AAA"}).should == original
+  end
+
   it "calls map blocks" do
     MockObject.map(:first, "//empty", {}) {|instance| instance.price = "5"}
     object = MockObject.from_xml_via_map("<empty></empty>")
