@@ -332,8 +332,8 @@ private
   end
 
   def symbolize_keys(*hashes)
-    hashes.each do |hash|
-      hash.each {|k,v| hash[k.to_sym] = v;hash.delete(k.to_s)}
+    hashes.map do |hash|
+      hash.inject({}) {|acc, (k, v)| acc[k.to_sym] = v; acc}
     end
   end
 end
