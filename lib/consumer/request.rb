@@ -279,8 +279,8 @@ class Consumer::Request
   end
 
   def config_root
-    if defined?(RAILS_ROOT)
-      RAILS_ROOT + "/config"
+    if defined?(Rails)
+      "#{Rails.root}/config"
     else
       "config"
     end
